@@ -40,6 +40,17 @@ Add-Type @'
     public int Right;       // x position of lower-right corner
     public int Bottom;      // y position of lower-right corner
   }
+
+  public class Win32 {
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool IsIconic(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    public const int SW_RESTORE = 9;
+  }
 '@
 
 # done this way so that the RECT type is accessible
@@ -63,14 +74,20 @@ Invoke-Expression @'
 
 $AllScreens = [System.Windows.Forms.Screen]::AllScreens | Sort-Object -Property { $_.WorkingArea.X }
 # default to right-most screen
-$ScreenIndex = $AllScreens.Count - 1
+$ScreenIndex = -1
 if ($args.Count -gt 0 -and $args.Count -lt 2) {
   $ScreenIndex = [int]$args[0] - 1
-  if (($ScreenIndex -gt ($AllScreens.Count + 1)) -or ($ScreenIndex -lt 0)) {
-    Write-Error "Screen index out-of-bounds, max index: $($AllScreens.Count)"
-    return
-  }
 }
+if (($ScreenIndex -gt ($AllScreens.Count + 1))) {
+  Write-Error "Screen index out-of-bounds, max index: $($AllScreens.Count)"
+  return
+} elseif ($ScreenIndex -lt 0) {
+    $TargetScreen = [System.Windows.Forms.Screen]::AllScreens | Where-Object { $_.Primary }
+} else {
+    $TargetScreen = $AllScreens[$ScreenIndex]
+}
+
+
 
 foreach ($s in $AllScreens) {
   Write-Debug ("[Monitor {0}] Size: {1}x{2} | Position: ({3}, {4})" -f
@@ -80,7 +97,6 @@ foreach ($s in $AllScreens) {
   )
 }
 
-$TargetScreen = $AllScreens[$ScreenIndex]
 $TargetScreenX = $TargetScreen.WorkingArea.X
 $TargetScreenY = $TargetScreen.WorkingArea.Y
 $TargetScreenWidth = $TargetScreen.WorkingArea.Width
@@ -90,6 +106,15 @@ $ExcludedProcessNames = @('ApplicationFrameHost')
 
 # Create a list to act as a receptacle for all the window handles we're about to enumerate
 $WindowHandles = [System.Collections.Generic.List[IntPtr]]::new()
+
+$windows = Get-Process | Where-Object { $_.MainWindowHandle -ne 0 }
+foreach ($win in $windows) {
+    $handle = $win.MainWindowHandle
+    $WindowHandles.Add($handle)
+    if ([Win32]::IsIconic($handle)) {
+        [Win32]::ShowWindow($handle, [Win32]::SW_RESTORE)
+    }
+}
 
 # Define the callback function
 $callback = {
