@@ -40,17 +40,6 @@ Add-Type @'
     public int Right;       // x position of lower-right corner
     public int Bottom;      // y position of lower-right corner
   }
-
-  public class Win32 {
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool IsIconic(IntPtr hWnd);
-
-    [DllImport("user32.dll")]
-    public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-
-    public const int SW_RESTORE = 9;
-  }
 '@
 
 # done this way so that the RECT type is accessible
@@ -88,7 +77,6 @@ if (($ScreenIndex -gt ($AllScreens.Count + 1))) {
 }
 
 
-
 foreach ($s in $AllScreens) {
   Write-Debug ("[Monitor {0}] Size: {1}x{2} | Position: ({3}, {4})" -f
     ($AllScreens.IndexOf($s) + 1),
@@ -106,15 +94,6 @@ $ExcludedProcessNames = @('ApplicationFrameHost')
 
 # Create a list to act as a receptacle for all the window handles we're about to enumerate
 $WindowHandles = [System.Collections.Generic.List[IntPtr]]::new()
-
-$windows = Get-Process | Where-Object { $_.MainWindowHandle -ne 0 }
-foreach ($win in $windows) {
-    $handle = $win.MainWindowHandle
-    $WindowHandles.Add($handle)
-    if ([Win32]::IsIconic($handle)) {
-        [Win32]::ShowWindow($handle, [Win32]::SW_RESTORE)
-    }
-}
 
 # Define the callback function
 $callback = {
@@ -135,9 +114,9 @@ if(![WindowUtil]::EnumWindows($callback, [IntPtr]::Zero)) {
 # $WindowHandles will contain all the window handles now
 $processHandles = @{}
 foreach($windowHandle in $WindowHandles) {
-  if (![WindowUtil]::IsWindowVisible($windowHandle)) {
-    Continue
-  }
+  #if (![WindowUtil]::IsWindowVisible($windowHandle)) {
+  #  Continue
+  #}
 
   $automationElement = [System.Windows.Automation.AutomationElement]::FromHandle($windowHandle)
   $pattern = $null
